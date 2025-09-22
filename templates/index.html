@@ -1,19 +1,143 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Airport Assistant</title>
+  <meta charset="UTF-8">
+  <title>Airport Assistant</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .scan-button {
+      font-size: 16px;
+      cursor: pointer;
+      background: white;
+      color: #007bff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .scan-button:hover {
+      background-color: #e6f0ff;
+    }
+
+    .chat-container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .chat-history {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-bubble {
+      padding: 12px 16px;
+      margin: 10px 0;
+      border-radius: 12px;
+      max-width: 75%;
+      line-height: 1.4;
+    }
+
+    .user-bubble {
+      background-color: #e0f0ff;
+      align-self: flex-end;
+      text-align: right;
+    }
+
+    .assistant-bubble {
+      background-color: #e6f7ea;
+      align-self: flex-start;
+      text-align: left;
+    }
+
+    form {
+      display: flex;
+      margin-top: 20px;
+    }
+
+    input[name="question"] {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px 0 0 6px;
+    }
+
+    button[type="submit"] {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 0 6px 6px 0;
+      cursor: pointer;
+    }
+
+    .reset-link {
+      display: block;
+      text-align: center;
+      margin-top: 30px;
+      color: #999;
+      text-decoration: none;
+    }
+
+    .reset-link:hover {
+      color: #333;
+    }
+  </style>
 </head>
 <body>
-    <h1>Ask the Airport Assistant</h1>
-    <form method="POST">
-        <input type="text" name="question" style="width: 400px;" placeholder="e.g., Where can I get coffee?" required>
-        <input type="submit" value="Ask">
-    </form>
 
-    {% if answer %}
-        <h2>Answer:</h2>
-        <p>{{ answer }}</p>
-    {% endif %}
+<header>
+  <h1>Airport Assistant</h1>
+ <a href="{{ url_for('scanner') }}">
+    <button class="scan-button">📷 Scan Boarding Pass</button>
+  </a>
+</header>
+
+<div class="chat-container">
+  <div class="chat-history">
+    {% for message in history %}
+      <div class="chat-bubble {{ 'user-bubble' if message.role == 'user' else 'assistant-bubble' }}">
+        {{ message.content }}
+      </div>
+    {% endfor %}
+  </div>
+
+  <form method="POST">
+    <input type="text" name="question" id="questionInput" placeholder="Type your message..." required>
+    <button type="submit">Send</button>
+  </form>
+
+  <a href="{{ url_for('reset') }}" class="reset-link">🔁 Reset Conversation</a>
+</div>
+
+
+
 </body>
 </html>

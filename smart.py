@@ -6,7 +6,6 @@ def parse_location_code(code: str) -> str:
     parts = code.split("-")
     if len(parts) != 3:
         return code
-    terminal = "HIA"
     level_code = parts[1]
     level = level_code[4]
     level_str = f"Level {level}"
@@ -64,23 +63,33 @@ def embed_chunks(client, model, chunks: List[str]) -> List[Dict]:
 def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-def search_similar(client, model, question: str, embedded_chunks: List[Dict]) -> str:
+def infer_concourse_from_gate(gate: str) -> str:
+    if not gate or len(gate) < 2:
+        return "Unknown"
+    letter = gate[0].upper()
+    return {
+        "A": "Concourse A",
+        "B": "Concourse B",
+        "C": "Concourse C",
+        "D": "Concourse D",
+        "E": "Concourse E"
+    }.get(letter, "Unknown")
+
+def search_similar(client, model, question: str, embedded_chunks: List[Dict], gate: str = "") -> str:
     res = client.embeddings.create(model=model, input=question)
     q_embedding = res.data[0].embedding
-    similarities = [(cosine_similarity(q_embedding, item['embedding']), item['text']) for item in embedded_chunks]
+
+    concourse = infer_concourse_from_gate(gate)
+
+    if concourse != "Unknown":
+        filtered_chunks = [chunk for chunk in embedded_chunks if concourse in chunk['text']]
+    else:
+        filtered_chunks = embedded_chunks
+
+    similarities = [
+        (cosine_similarity(q_embedding, item['embedding']), item['text'])
+        for item in filtered_chunks
+    ]
     similarities.sort(reverse=True)
     top_results = [text for _, text in similarities[:3]]
     return "\n\n".join(top_results)
-
-def generate_answer(client, model: str, context: str, question: str) -> str:
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a helpful airport assistant that recommends places for shopping, dining, and relaxing."},
-            {"role": "user", "content": f"Context:\n{context}"},
-            {"role": "user", "content": f"Question:\n{question}"}
-        ],
-        temperature=0.7,
-        max_tokens=500
-    )
-    return response.choices[0].message.content

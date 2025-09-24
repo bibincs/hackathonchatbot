@@ -22,7 +22,7 @@
       border-radius:10px; box-sizing:border-box; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none;
     }
     .overlay-rect::after {
-      content:''; position:absolute; inset:0; border-radius:10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.25); pointer-events:none;
+      content:''; position:absolute; inset:0; border-radius:10px; box-shadow:0 0 0 9999px rgba(0,0,0,0.25); pointer-events:none;
     }
 
     .overlay-box { margin-top:12px; background:rgba(255,255,255,0.98); padding:12px; border-radius:8px; max-width:420px; text-align:left; }
@@ -69,52 +69,150 @@
   <script type="module">
     import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
 
-    function parseBoardingPass(data) {
-      const nameMatch   = data.match(/^M1([A-Z]+)\/([A-Z]+)/);
-      const flightMatch = data.match(/([A-Z]{2}\d{3,4})/);
-      const gateMatch   = data.match(/([A-E]\d{1,2})/);  // restrict to A–E gates; ignore M*
-      const timeMatch   = data.match(/(\d{4})$/);
-
-      const name  = nameMatch  ? `${nameMatch[2]} ${nameMatch[1]}` : "Passenger";
-      const flight= flightMatch? flightMatch[1] : "Unknown";
-      // IMPORTANT: if gate not matched, return empty string so server randomizes
-      const gate  = gateMatch  ? gateMatch[1]   : "";
-      const time  = timeMatch  ? `${timeMatch[1].slice(0,2)}:${timeMatch[1].slice(2)}` : "";
-
-      return { name, flight, gate, time };
+    // --- helpers -----------------------------------------------------------
+    function toHHMM(s) {
+      const m = (s || '').match(/\b(\d{3,4})\b/);
+      if (!m) return '';
+      const v = m[1].padStart(4, '0');
+      const hh = v.slice(0,2), mm = v.slice(2,4);
+      if (+hh > 23 || +mm > 59) return '';
+      return `${hh}:${mm}`;
+    }
+    function normalizeGate(s) {
+      const m = (s || '').toUpperCase().match(/\b([A-Z])\s*0*([0-9]{1,2})\b/);
+      return m ? `${m[1]}${parseInt(m[2],10)}` : '';
+    }
+    function normalizeFlight(s) {
+      const m = (s || '').toUpperCase().match(/\b([A-Z]{2})\s*0*([0-9]{2,4})\b/);
+      return m ? `${m[1]}${m[2]}` : (s || '');
+    }
+    function stripTitles(n) {
+      // Removes trailing/embedded titles like MR/MRS/MS/MISS/DR/JR/SR/II/III/IV
+      return (n || '').replace(/\b(MR|MRS|MS|MISS|DR|JR|SR|II|III|IV)\b/g, '').replace(/\s+/g,' ').trim();
     }
 
+    // Try several ways to get LAST/FIRST from BCBP-like text
+    function extractName(raw) {
+      const U = (raw || '').toUpperCase();
+      // 1) Standard BCBP "M1LAST/FIRST"
+      let m = U.match(/^M1\s*([A-Z0-9 \-]+)\/([A-Z0-9 \-]+)/);
+      if (m) {
+        const last  = stripTitles(m[1]);
+        const first = stripTitles(m[2]);
+        if (first && last) return `${first} ${last}`.replace(/\s+/g,' ').trim();
+      }
+      // 2) Any "LAST/FIRST" pattern
+      m = U.match(/\b([A-Z0-9 \-]{2,})\/([A-Z0-9 \-]{2,})\b/);
+      if (m) {
+        const last  = stripTitles(m[1]);
+        const first = stripTitles(m[2]);
+        if (first && last) return `${first} ${last}`.replace(/\s+/g,' ').trim();
+      }
+      // 3) Sometimes the name is "LAST FIRST" (no slash)
+      m = U.match(/\bNAME[:\s]+([A-Z0-9 \-]+)\b/);
+      if (m) {
+        const parts = stripTitles(m[1]).split(/\s+/);
+        if (parts.length >= 2) {
+          const first = parts.slice(1).join(' ');
+          const last  = parts[0];
+          return `${first} ${last}`.trim();
+        }
+      }
+      return '';
+    }
+
+    function parseBoardingPass(data) {
+      let name   = 'Passenger';
+      let flight = '';
+      let gate   = '';
+      let time   = '';
+
+      if (!data || typeof data !== 'string') {
+        return { name, flight, gate, time };
+      }
+
+      // Clean control chars; keep original for potential display, use U for matching
+      const sanitized = data.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+      const U = sanitized.toUpperCase();
+      const fmt = U.charAt(0); // 'M' (PDF417), 'K'/'L' (Aztec), etc.
+
+      try {
+        // --- NAME ---
+        const maybeName = extractName(sanitized);
+        if (maybeName) name = maybeName;
+
+        // --- FLIGHT ---
+        const flM = U.match(/\b([A-Z]{2})\s*([0-9]{2,4})\b/);
+        if (flM) flight = normalizeFlight(`${flM[1]}${flM[2]}`);
+
+        // --- GATE ---
+        // Prefer explicit "GATE X" then any like "B5/C24"
+        const g1 = U.match(/\bGATE\s*([A-Z]\s*\d{1,2})\b/);
+        const g2 = U.match(/\b([A-Z]\s*\d{1,2})\b/);
+        if (g1) gate = normalizeGate(g1[1]);
+        else if (g2) gate = normalizeGate(g2[1]);
+
+        // --- TIME ---
+        // pick a plausible HHMM; take last 3-4 digit group that formats to HH:MM
+        const times = U.match(/\b\d{3,4}\b/g) || [];
+        for (let i = times.length - 1; i >= 0; i--) {
+          const hhmm = toHHMM(times[i]);
+          if (hhmm) { time = hhmm; break; }
+        }
+
+        // Minor heuristic improvements for specific formats
+        if ((fmt === 'K' || fmt === 'L') && !gate) {
+          // Some mobile BPs encode "GATE:A12"
+          const g3 = U.match(/\bGATE[:=]\s*([A-Z]\s*\d{1,2})\b/);
+          if (g3) gate = normalizeGate(g3[1]);
+        }
+
+      } catch (e) {
+        console.warn('Parser error:', e);
+      }
+
+      return {
+        name:   name || 'Passenger',
+        flight: flight || 'Unknown Flight',
+        gate:   gate || '',   // leave blank -> server can randomize default gate
+        time:   time || ''    // leave blank -> optional
+      };
+    }
+
+    // --- main --------------------------------------------------------------
     window.addEventListener('DOMContentLoaded', () => {
       const codeReader = new BrowserMultiFormatReader();
       const videoElem  = document.getElementById('video');
       const resultDiv  = document.getElementById('result');
       const form       = document.getElementById('passenger-form');
 
-      const qInput     = document.getElementById('question');
-      const nameInput  = document.getElementById('passenger_name');
-      const flightInput= document.getElementById('flight_number');
-      const gateInput  = document.getElementById('gate');
-      const timeInput  = document.getElementById('time');
+      const qInput      = document.getElementById('question');
+      const nameInput   = document.getElementById('passenger_name');
+      const flightInput = document.getElementById('flight_number');
+      const gateInput   = document.getElementById('gate');
+      const timeInput   = document.getElementById('time');
 
       codeReader.decodeFromVideoDevice(null, videoElem, (result, error, controls) => {
         if (result) {
-          const raw  = result.getText();
+          const raw = result.getText();
+          console.log('[SCAN RAW]', raw);
+
           const info = parseBoardingPass(raw);
+          console.log('[PARSED]', info);
 
-          resultDiv.innerText = `✅ Scanned: ${info.name} — ${info.flight}` +
-                                 (info.gate ? ` — Gate ${info.gate}` : "") +
-                                 (info.time ? ` — ${info.time}` : "");
+          resultDiv.innerText = `✅ Scanned: ${info.name} — ${info.flight}`
+                              + (info.gate ? ` — Gate ${info.gate}` : '')
+                              + (info.time ? ` — ${info.time}` : '');
 
-          qInput.value    = `Hi, I'm ${info.name}. My flight is ${info.flight}` +
-                            (info.gate ? ` from gate ${info.gate}` : "") +
-                            (info.time ? ` at ${info.time}` : "") + `.`;
-          nameInput.value  = info.name;
-          flightInput.value= info.flight;
-          gateInput.value  = info.gate;      // may be empty => server randomizes
-          timeInput.value  = info.time;
+          qInput.value       = `Hi, I'm ${info.name}. My flight is ${info.flight}`
+                             + (info.gate ? ` from gate ${info.gate}` : '')
+                             + (info.time ? ` at ${info.time}` : '') + `.`;
+          nameInput.value    = info.name;
+          flightInput.value  = info.flight;
+          gateInput.value    = info.gate;   // if blank, your Flask code will randomize a default gate
+          timeInput.value    = info.time;
 
           try { controls.stop(); } catch(e) {}
-
           setTimeout(() => form.submit(), 300);
         }
       });

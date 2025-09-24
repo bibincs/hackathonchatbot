@@ -79,7 +79,7 @@
                 {% if it.concourse %}<p class="meta">{{ it.concourse }}</p>{% endif %}
 
                 <div class="actions">
-                  <a class="btn" href="{{ url_for('directions', dst=dst_id) }}">🧭 Get directions</a>
+                  <a class="btn" href="{{ url_for('directions', waypoints=dst_id) }}">🧭 Get directions</a>
                 </div>
               </div>
             </div>

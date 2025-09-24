@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Personalized Travel Recommendations</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f3f4f6;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 1rem;
+    }
+    .main-container {
+        width: 100%;
+        max-width: 600px;
+        background-color: #ffffff;
+        border-radius: 1.5rem;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 80vh;
+    }
+    .header {
+        background-color: #2563eb;
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        border-top-left-radius: 1.5rem;
+        border-top-right-radius: 1.5rem;
+    }
+    .content-area {
+        flex-grow: 1;
+        padding: 2rem;
+        overflow-y: auto;
+    }
+    .video-wrap {
+        position: relative;
+        width: 100%;
+        max-width: 420px;
+        aspect-ratio: 16/9;
+        background: #000;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem auto;
+    }
+    video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .overlay-rect {
+        position: absolute;
+        width: 78%;
+        height: 40%;
+        border: 2px dashed rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        box-sizing: border-box;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    .overlay-rect::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 10px;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+    }
+    .scan-result {
+        margin-top: 10px;
+        color: green;
+        font-weight: 600;
+        min-height: 20px;
+        text-align: center;
+    }
+    .chat-messages {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .chat-message {
+        padding: 1rem;
+        border-radius: 1.5rem;
+    }
+    .chatbot-message {
+        background-color: #e0f2fe;
+        color: #1e40af;
+        align-self: flex-start;
+        border-bottom-left-radius: 0.5rem;
+        line-height: 1.5;
+    }
+    .user-message {
+        background-color: #d1fae5;
+        color: #065f46;
+        align-self: flex-end;
+        border-bottom-right-radius: 0.5rem;
+    }
+    .input-area {
+        padding: 1rem;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        background-color: #ffffff;
+    }
+    .input-area input {
+        flex-grow: 1;
+        padding: 0.75rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 9999px;
+        outline: none;
+        transition: all 0.2s;
+    }
+    .input-area input:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+    }
+    .input-area button {
+        background-color: #2563eb;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 9999px;
+        margin-left: 0.75rem;
+        transition: background-color 0.2s;
+        cursor: pointer;
+    }
+    .input-area button:hover {
+        background-color: #1d4ed8;
+    }
+    .recommendations-display {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    .recommendation-card {
+        background-color: #f1f5f9;
+        padding: 1.5rem;
+        border-radius: 1rem;
+        white-space: pre-wrap;
+        line-height: 1.6;
+        color: #334155;
+        box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.06);
+    }
+    .recommendation-item-card {
+        background-color: #e0f2fe;
+        color: #1e40af;
+        padding: 1.5rem;
+        border-radius: 1rem;
+        line-height: 1.6;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1-px rgba(0,0,0,0.06);
+    }
+    .recommendation-item-card h4 {
+      font-weight: bold;
+      font-size: 1.125rem;
+      margin-bottom: 0.5rem;
+    }
+    .recommendation-item-card .location-info {
+      font-size: 0.875rem;
+      color: #60a5fa;
+      margin-bottom: 1rem;
+    }
+    .recommendation-item-card .directions-button {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      background-color: #2563eb;
+      color: white;
+      border-radius: 9999px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    .recommendation-item-card .directions-button:hover {
+      background-color: #1d4ed8;
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <div class="header">
+      Personalized Recommendations
+    </div>
+    <div class="content-area">
+      <div id="scanner-view">
+        <h2 class="text-xl font-semibold text-center mb-2">Scan your Boarding Pass</h2>
+        <p class="text-sm text-gray-500 text-center mb-4">Make sure to scan your departing flight boarding pass</p>
+        
+        <p class="text-sm text-gray-500 text-center mb-4">
+          Hold the boarding pass steady and in focus. Avoid glare and shadows.
+        </p>
+
+        <div class="video-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="overlay-rect" aria-hidden="true"></div>
+        </div>
+        <div id="result" class="scan-result"></div>
+      </div>
+
+      <div id="chat-view" style="display: none;">
+        <div id="chat-messages" class="chat-messages"></div>
+      </div>
+      
+      <div id="recommendations-view" style="display: none;">
+        <h3 class="text-xl font-bold mb-4">Your Personalized Recommendations</h3>
+        <div id="recommendations-content" class="recommendations-display"></div>
+      </div>
+    </div>
+    
+    <div id="input-view" class="input-area" style="display: none;">
+      <input type="text" id="user-input" placeholder="Type your answer...">
+      <button id="send-button">Send</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
+    
+    // Assume a Flask server is running on localhost
+    const API_URL = "http://127.0.0.1:5000";
+
+    function parseBoardingPass(data) {
+        let name = "Unknown Passenger";
+        let flight = "Unknown Flight";
+        let gate = "Unknown Gate";
+        let time = "Unknown Time";
+        let from = "Unknown Origin";
+        let to = "Unknown Destination";
+        let passengerId = null;
+
+        if (!data || typeof data !== 'string') {
+            return { name, flight, gate, from, to, time, passengerId };
+        }
+
+        const sanitizedData = data.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+        
+        const firstLine = sanitizedData.split('\n')[0];
+        
+        // The first character indicates the format: M for PDF417, K or L for Aztec
+        const format = sanitizedData.charAt(0);
+        let parserData = sanitizedData;
+
+        try {
+            if (format === 'M') {
+                // This is a PDF417 format (printed boarding pass)
+                const fixedData = parserData.substring(0, 71);
+                const variableData = parserData.substring(71);
+
+                // Passenger Name is in a fixed position
+                const namePart = fixedData.substring(2, 22).trim();
+                const parts = namePart.split('/');
+                name = `${parts[1].trim()} ${parts[0].trim()}`;
+                
+                passengerId = `${name.replace(/\s/g, '-')}-${fixedData.substring(39, 45)}`;
+
+
+                // Flight details are also in a fixed position
+                flight = fixedData.substring(39, 45).trim();
+                from = fixedData.substring(22, 25);
+                to = fixedData.substring(25, 28);
+                gate = fixedData.substring(28, 33).trim();
+                // The time is not a fixed part of the mandatory fields, so it's a tricky one.
+                // We can look for it in the variable data section if it exists.
+                const timeMatch = variableData.match(/ET(\d{4})/);
+                if (timeMatch) {
+                    time = `${timeMatch[1].substring(0, 2)}:${timeMatch[1].substring(2)}`;
+                }
+                
+            } else if (format === 'K' || format === 'L') {
+                // This is an Aztec format (mobile boarding pass)
+                // Aztec data is often in a key-value pair format
+                const segments = parserData.split('/');
+                
+                // Name is usually the first segment after the header
+                const nameMatch = segments[0].match(/([A-Z\s]+)\/([A-Z\s]+)/);
+                if (nameMatch) {
+                    name = `${nameMatch[2].trim()} ${nameMatch[1].trim()}`;
+                }
+                
+                passengerId = name.replace(/\s/g, '-');
+
+
+                // Other fields are in specific segments
+                if (segments[1] && segments[1].length >= 10) {
+                    flight = segments[1].substring(0, 6);
+                    from = segments[1].substring(6, 9);
+                    to = segments[1].substring(9, 12);
+                }
+
+                // Gate and time are often in a separate segment
+                const gateMatch = sanitizedData.match(/GATE\s*(\S+)/i);
+                if (gateMatch) {
+                    gate = gateMatch[1];
+                }
+                
+            } else {
+                // Fallback for non-standard formats like the one you previously provided
+                // This handles cases where the scanner outputs simple, space-separated data
+                const parts = sanitizedData.split(/\s+/);
+                const nameMatch = parts[0].match(/M1(.+)\/(.+)/);
+                if (nameMatch) {
+                  name = `${nameMatch[2].trim()} ${nameMatch[1].trim()}`;
+                  passengerId = name.replace(/\s/g, '-');
+                }
+                if (parts.length > 1) {
+                  flight = parts[1];
+                }
+                if (parts.length > 4) {
+                  gate = parts[4].substring(0, 2);
+                }
+            }
+        } catch (e) {
+            console.error("Parsing error:", e);
+            // If an error occurs, return the default values.
+            return { name: "Parsing Error", flight: "N/A", gate: "N/A", from: "N/A", to: "N/A", time: "N/A", passengerId: null };
+        }
+
+        return { name, flight, gate, from, to, time, passengerId };
+    }
+
+    // UI elements
+    const scannerView = document.getElementById('scanner-view');
+    const chatView = document.getElementById('chat-view');
+    const recommendationsView = document.getElementById('recommendations-view');
+    const inputView = document.getElementById('input-view');
+    const chatMessages = document.getElementById('chat-messages');
+    const userInput = document.getElementById('user-input');
+    const sendButton = document.getElementById('send-button');
+    const recommendationsContent = document.getElementById('recommendations-content');
+    const videoElem = document.getElementById('video');
+    const resultDiv = document.getElementById('result');
+
+    let passengerInfo = {};
+    let currentStep = 0;
+    const questions = [
+      "What is your country of origin?",
+      "What are your interests (e.g., history, art, local food)?",
+      "What is your travel purpose (e.g., vacation, business, adventure)?"
+    ];
+
+    const showView = (viewId) => {
+      scannerView.style.display = 'none';
+      chatView.style.display = 'none';
+      recommendationsView.style.display = 'none';
+      inputView.style.display = 'none';
+      document.getElementById(viewId).style.display = 'block';
+    };
+
+    const addMessage = (text, type) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('chat-message', type === 'user' ? 'user-message' : 'chatbot-message');
+        messageDiv.innerText = text;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    };
+    
+    const askNextQuestion = () => {
+        if (currentStep < questions.length) {
+            addMessage(questions[currentStep], 'chatbot');
+            showView('chat-view');
+            inputView.style.display = 'flex';
+            userInput.focus();
+        } else {
+            generateFinalRecommendations();
+        }
+    };
+    
+    const handleInput = async () => {
+        const userResponse = userInput.value.trim();
+        if (userResponse) {
+            addMessage(userResponse, 'user');
+            
+            // Store the user's answer based on the current step
+            switch (currentStep) {
+                case 0: passengerInfo.country_of_origin = userResponse; break;
+                case 1: passengerInfo.interests = userResponse.split(',').map(item => item.trim()); break;
+                case 2: passengerInfo.travel_purpose = userResponse; break;
+            }
+            
+            userInput.value = '';
+            currentStep++;
+            
+            if (currentStep < questions.length) {
+                askNextQuestion();
+            } else {
+                // Save profile to local storage for future visits
+                localStorage.setItem(`profile-${passengerInfo.passengerId}`, JSON.stringify(passengerInfo));
+                generateFinalRecommendations();
+            }
+        }
+    };
+
+    const generateFinalRecommendations = async () => {
+        inputView.style.display = 'none';
+        
+        // Ensure the passengerInfo object is not empty before sending
+        if (Object.keys(passengerInfo).length === 0) {
+            console.error('Error: passengerInfo object is empty. Cannot send request.');
+            addMessage("An error occurred. Please try scanning your boarding pass again.", 'chatbot');
+            return;
+        }
+
+        addMessage("Thank you! Generating your personalized recommendations...", 'chatbot');
+
+        try {
+            const response = await fetch(`${API_URL}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(passengerInfo)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText);
+            }
+
+            const responseData = await response.json();
+            showView('recommendations-view');
+            
+            const fullText = responseData.greeting;
+            
+            const locationMatch = fullText.match(/at (.*?)\./);
+            const location = locationMatch ? locationMatch[1].trim() : 'Location not found';
+            
+            const splitIndex = fullText.search(/(I hope|Have a wonderful|Enjoy your)/i);
+            
+            let recommendationText;
+            let closingText;
+
+            if (splitIndex !== -1) {
+                recommendationText = fullText.substring(0, splitIndex).trim();
+                closingText = fullText.substring(splitIndex).trim();
+            } else {
+                recommendationText = fullText;
+                closingText = "";
+            }
+            
+            recommendationsContent.innerHTML = '';
+
+            if (recommendationText) {
+                const recCard = document.createElement('div');
+                recCard.className = 'recommendation-item-card';
+                
+                recCard.innerHTML = `
+                  <h4>Recommended Spot</h4>
+                  <p class="location-info">${location}</p>
+                  <p>${recommendationText}</p>
+                  <a href="https://maps.app.goo.gl/your-airport-map" target="_blank" class="directions-button" data-location="${location}">Get Directions</a>
+                `;
+                recommendationsContent.appendChild(recCard);
+            }
+
+            if (closingText) {
+                const closingCard = document.createElement('div');
+                closingCard.className = 'recommendation-card';
+                closingCard.innerText = closingText;
+                recommendationsContent.appendChild(closingCard);
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            addMessage("An error occurred. Please check the server connection and try again.", 'chatbot');
+        }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const codeReader = new BrowserMultiFormatReader();
+      
+      codeReader.decodeFromVideoDevice(null, videoElem, (result, error, controls) => {
+        if (result) {
+          const raw = result.getText();
+          const info = parseBoardingPass(raw);
+
+          resultDiv.innerText = `✅ Scanned: ${info.name} — ${info.flight} — Gate ${info.gate} — ${info.time}`;
+          console.log('Parsed Info:', info);
+          
+          if (!info.passengerId) {
+             console.error('Error: Could not parse a valid passengerId.');
+             addMessage("There was an error scanning your boarding pass. Please try again or manually provide your details.", 'chatbot');
+             try { controls.stop(); } catch (e) { console.warn(e); }
+             return;
+          }
+
+          const localProfile = localStorage.getItem(`profile-${info.passengerId}`);
+          
+          if (localProfile) {
+            addMessage(`Welcome back, ${info.name}! Based on your previous interests, we're generating recommendations for you now.`, 'chatbot');
+            passengerInfo = JSON.parse(localProfile);
+            generateFinalRecommendations();
+          } else {
+            addMessage(`Hello, ${info.name}! We've scanned your boarding pass for flight ${info.flight}. To get you the best recommendations, could you tell us a bit more about your trip?`, 'chatbot');
+            passengerInfo = {
+                name: info.name,
+                flight_number: info.flight,
+                gate: info.gate,
+                time: info.time,
+                passengerId: info.passengerId
+            };
+            askNextQuestion();
+          }
+          
+          try { controls.stop(); } catch (e) { console.warn(e); }
+        }
+      });
+      
+      sendButton.addEventListener('click', handleInput);
+      userInput.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter') {
+              handleInput();
+          }
+      });
+    });
+  </script>
+</body>
+</html>

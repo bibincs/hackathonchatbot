@@ -1,67 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Boarding Pass Scanner</title>
-  <script type="module">
-    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Scan Boarding Pass</title>
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const codeReader = new BrowserMultiFormatReader();
-      const videoElement = document.getElementById('video');
-      const form = document.getElementById('passenger-form');
-      const questionInput = document.getElementById('question');
-
-      function parseBoardingPass(data) {
-        console.log("📦 Raw scan:", data);
-
-        const nameMatch = data.match(/^M1([A-Z]+)\/([A-Z]+)/);
-        const flightMatch = data.match(/([A-Z]{2}\d{3,4})/);
-        const gateMatch = data.match(/([A-Z]\d{2})/);
-        const timeMatch = data.match(/(\d{4})$/);
-
-        const name = nameMatch ? `${nameMatch[2]} ${nameMatch[1]}` : "Passenger";
-        const flight = flightMatch ? flightMatch[1] : "Unknown Flight";
-        const gate = gateMatch ? gateMatch[1] : "Unknown Gate";
-        const time = timeMatch ? `${timeMatch[1].slice(0,2)}:${timeMatch[1].slice(2)}` : "Unknown Time";
-
-        console.log("👤 Name:", name);
-        console.log("✈️ Flight:", flight);
-        console.log("🛫 Gate:", gate);
-        console.log("⏰ Boarding Time:", time);
-
-        return { name, flight, gate, time };
-      }
-
-
-    codeReader.decodeFromVideoDevice(null, videoElement, (result, error, controls) => {
-      if (result) {
-        const raw = result.getText();
-        const info = parseBoardingPass(raw);
-        console.log("🧪 Final Info:", info);
-
-        const message = `Hi, I'm ${info.name}. My flight is ${info.flight} from gate ${info.gate} at ${info.time}.`;
-        console.log("📨 Final Message:", message);
-        questionInput.value = message;
-
-        controls.stop();
-        form.submit();
-      }
-    });
-   });
-  </script>
   <style>
-    body { font-family: Arial; text-align: center; padding: 20px; }
-    video { width: 100%; max-width: 500px; border: 2px solid #ccc; border-radius: 8px; }
+    body { margin:0; font-family:Inter, Arial; background:#f4f4f4; display:flex; flex-direction:column; height:100vh; }
+    .navbar { display:flex; align-items:center; padding:12px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    .navbar a img { height:20px; }
+
+    .content { padding:16px; text-align:center; flex:1; display:flex; flex-direction:column; align-items:center; gap:12px; }
+    .heading { font-size:20px; margin:0; }
+    .subheading { color:#666; margin:0 0 8px 0; }
+
+    .video-wrap { position:relative; width:100%; max-width:420px; aspect-ratio: 16/9; background:#000; border-radius:12px; overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,0.12); display:flex; align-items:center; justify-content:center; }
+    video { width:100%; height:100%; object-fit:cover; display:block; }
+
+    .overlay-rect {
+      position:absolute; width:78%; height:40%; border:2px dashed rgba(255,255,255,0.9);
+      border-radius:10px; box-sizing:border-box; left:50%; top:50%; transform:translate(-50%,-50%); pointer-events:none;
+    }
+    .overlay-rect::after {
+      content:''; position:absolute; inset:0; border-radius:10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.25); pointer-events:none;
+    }
+
+    .overlay-box { margin-top:12px; background:rgba(255,255,255,0.98); padding:12px; border-radius:8px; max-width:420px; text-align:left; }
+    .scan-result { margin-top:10px; color:green; font-weight:600; min-height:20px; }
+
+    @media (max-width:480px) {
+      .heading { font-size:18px; }
+      .video-wrap { aspect-ratio: 3/2; }
+    }
   </style>
 </head>
 <body>
-  <h1>Scan Your Boarding Pass</h1>
-  <video id="video" autoplay></video>
+  <div class="navbar">
+    <a href="{{ url_for('chat') }}"><img src="{{ url_for('static', filename='assets/chevron-left.svg') }}" alt="Back"></a>
+  </div>
 
-  <form id="passenger-form" method="POST" action="/">
-    <input type="hidden" id="question" name="question">
-  </form>
+  <div class="content">
+    <h2 class="heading">Scan your Boarding Pass</h2>
+    <p class="subheading">Make sure to scan your departing flight boarding pass</p>
+
+    <div class="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="overlay-rect" aria-hidden="true"></div>
+    </div>
+
+    <div class="overlay-box">
+      <strong>Scan your Boarding Pass</strong>
+      <p style="margin:6px 0 0 0; color:#666; font-size:14px;">
+        Aim at the barcode on your boarding pass and it will be scanned automatically
+      </p>
+    </div>
+
+    <div id="result" class="scan-result"></div>
+
+    <form id="passenger-form" method="POST" action="{{ url_for('chat') }}">
+      <input type="hidden" name="question" id="question" />
+      <input type="hidden" name="passenger_name" id="passenger_name" />
+      <input type="hidden" name="flight_number" id="flight_number" />
+      <input type="hidden" name="gate" id="gate" />
+      <input type="hidden" name="time" id="time" />
+    </form>
+  </div>
+
+  <script type="module">
+    import { BrowserMultiFormatReader } from 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.0.10/+esm';
+
+    function parseBoardingPass(data) {
+      const nameMatch   = data.match(/^M1([A-Z]+)\/([A-Z]+)/);
+      const flightMatch = data.match(/([A-Z]{2}\d{3,4})/);
+      const gateMatch   = data.match(/([A-E]\d{1,2})/);  // restrict to A–E gates; ignore M*
+      const timeMatch   = data.match(/(\d{4})$/);
+
+      const name  = nameMatch  ? `${nameMatch[2]} ${nameMatch[1]}` : "Passenger";
+      const flight= flightMatch? flightMatch[1] : "Unknown";
+      // IMPORTANT: if gate not matched, return empty string so server randomizes
+      const gate  = gateMatch  ? gateMatch[1]   : "";
+      const time  = timeMatch  ? `${timeMatch[1].slice(0,2)}:${timeMatch[1].slice(2)}` : "";
+
+      return { name, flight, gate, time };
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const codeReader = new BrowserMultiFormatReader();
+      const videoElem  = document.getElementById('video');
+      const resultDiv  = document.getElementById('result');
+      const form       = document.getElementById('passenger-form');
+
+      const qInput     = document.getElementById('question');
+      const nameInput  = document.getElementById('passenger_name');
+      const flightInput= document.getElementById('flight_number');
+      const gateInput  = document.getElementById('gate');
+      const timeInput  = document.getElementById('time');
+
+      codeReader.decodeFromVideoDevice(null, videoElem, (result, error, controls) => {
+        if (result) {
+          const raw  = result.getText();
+          const info = parseBoardingPass(raw);
+
+          resultDiv.innerText = `✅ Scanned: ${info.name} — ${info.flight}` +
+                                 (info.gate ? ` — Gate ${info.gate}` : "") +
+                                 (info.time ? ` — ${info.time}` : "");
+
+          qInput.value    = `Hi, I'm ${info.name}. My flight is ${info.flight}` +
+                            (info.gate ? ` from gate ${info.gate}` : "") +
+                            (info.time ? ` at ${info.time}` : "") + `.`;
+          nameInput.value  = info.name;
+          flightInput.value= info.flight;
+          gateInput.value  = info.gate;      // may be empty => server randomizes
+          timeInput.value  = info.time;
+
+          try { controls.stop(); } catch(e) {}
+
+          setTimeout(() => form.submit(), 300);
+        }
+      });
+    });
+  </script>
 </body>
-
 </html>

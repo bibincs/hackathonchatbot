@@ -1,143 +1,215 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Airport Assistant</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      margin: 0;
-      padding: 0;
-    }
+    :root { --accent:#e30613; --primary:#001f6e; --bg:#f5f5f5; }
+    html,body { height:100%; margin:0; }
+    body { margin:0; font-family:Inter, Arial, sans-serif; background:var(--bg); display:flex; flex-direction:column; height:100vh; }
 
-    header {
-      background-color: #007bff;
-      color: white;
-      padding: 15px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+    .navbar { display:flex; align-items:center; justify-content:space-between; padding:12px; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,0.08); z-index:3; }
+    .navbar h1 { font-size:16px; margin:0; }
+    .nav-actions { display:flex; gap:8px; }
+    .btn-link { background:none; border:1px solid #ddd; padding:8px 10px; border-radius:8px; cursor:pointer; }
 
-    header h1 {
-      margin: 0;
-      font-size: 20px;
-    }
+    .chat-container { flex:1; padding:16px; overflow:auto; display:flex; flex-direction:column; gap:12px; scroll-behavior:smooth; padding-bottom:90px; }
 
-    .scan-button {
-      font-size: 16px;
-      cursor: pointer;
-      background: white;
-      color: #007bff;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      transition: background 0.2s;
-    }
+    .msg-row { display:flex; gap:10px; align-items:flex-start; max-width:100%; }
+    .assistant { align-self:flex-start; display:flex; }
+    .icon { flex:0 0 44px; width:44px; height:44px; border-radius:50%; background:var(--accent); display:grid; place-items:center; overflow:hidden; }
+    .icon img { width:70%; height:70%; display:block; object-fit:contain; }
+    .bubble { flex:1 1 auto; background:#fff; padding:12px; border-radius:12px; border:1px solid #eee; white-space:pre-wrap; word-wrap:break-word; }
 
-    .scan-button:hover {
-      background-color: #e6f0ff;
-    }
+    .user { align-self:flex-end; justify-content:flex-end; }
+    .user .bubble { background:#000; color:#fff; padding:12px; border-radius:12px; max-width:85%; white-space:pre-wrap; word-wrap:break-word; }
 
-    .chat-container {
-      max-width: 600px;
-      margin: 40px auto;
-      padding: 20px;
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
+    .btn-row { display:flex; gap:8px; margin-left:56px; flex-wrap:wrap; }
+    .btn { padding:8px 12px; border-radius:8px; border:1px solid #ddd; background:#fff; cursor:pointer; font-size:14px; }
+    .btn.selected { background:var(--primary); color:#fff; border-color:var(--primary); }
 
-    .chat-history {
-      display: flex;
-      flex-direction: column;
-    }
+    .input-bar { position:fixed; left:0; right:0; bottom:0; display:flex; padding:10px; gap:8px; background:#eceff2; border-top:1px solid #ddd; align-items:center; }
+    .input-bar input { flex:1; padding:12px; border-radius:20px; border:none; outline:none; font-size:16px; }
+    .input-bar button { background:none; border:none; cursor:pointer; padding:6px; }
+    .input-bar.hidden { display:none; }
 
-    .chat-bubble {
-      padding: 12px 16px;
-      margin: 10px 0;
-      border-radius: 12px;
-      max-width: 75%;
-      line-height: 1.4;
-    }
+    .cta-scan { margin-top:8px; margin-left:56px; }
+    .cta-scan a button { background:var(--primary); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
 
-    .user-bubble {
-      background-color: #e0f0ff;
-      align-self: flex-end;
-      text-align: right;
-    }
-
-    .assistant-bubble {
-      background-color: #e6f7ea;
-      align-self: flex-start;
-      text-align: left;
-    }
-
-    form {
-      display: flex;
-      margin-top: 20px;
-    }
-
-    input[name="question"] {
-      flex: 1;
-      padding: 10px;
-      font-size: 16px;
-      border: 1px solid #ccc;
-      border-radius: 6px 0 0 6px;
-    }
-
-    button[type="submit"] {
-      padding: 10px 20px;
-      font-size: 16px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 0 6px 6px 0;
-      cursor: pointer;
-    }
-
-    .reset-link {
-      display: block;
-      text-align: center;
-      margin-top: 30px;
-      color: #999;
-      text-decoration: none;
-    }
-
-    .reset-link:hover {
-      color: #333;
-    }
+    /* spinner keyframes for loader */
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>Airport Assistant</h1>
- <a href="{{ url_for('scanner') }}">
-    <button class="scan-button">📷 Scan Boarding Pass</button>
-  </a>
-</header>
-
-<div class="chat-container">
-  <div class="chat-history">
-    {% for message in history %}
-      <div class="chat-bubble {{ 'user-bubble' if message.role == 'user' else 'assistant-bubble' }}">
-        {{ message.content }}
-      </div>
-    {% endfor %}
+  <div class="navbar">
+    <h1>Personalize your Itinerary</h1>
+    <div class="nav-actions">
+      <a href="{{ url_for('itinerary') }}"><button class="btn-link">🧾 My Itinerary</button></a>
+      <a href="{{ url_for('reset') }}"><button class="btn-link" title="Start fresh">🔄</button></a>
+    </div>
   </div>
 
-  <form method="POST">
-    <input type="text" name="question" id="questionInput" placeholder="Type your message..." required>
-    <button type="submit">Send</button>
+  <div class="chat-container" id="chat-container">
+    {% if pre_scan %}
+      <!-- PRE-SCAN welcome bubble with scan CTA. Chatbox is disabled. -->
+      <div class="msg-row assistant">
+        <div class="icon"><img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="AI"></div>
+        <div class="bubble">
+          Hi, welcome to Hamad International Airport — the world’s best airport! 👋
+          <br>Please scan your boarding pass to continue.
+        </div>
+      </div>
+      <div class="cta-scan">
+        <a href="{{ url_for('scanner') }}"><button>📷 Scan Boarding Pass</button></a>
+      </div>
+
+    {% elif history and history|length > 0 %}
+      {% for message in history %}
+        {% if message.role == 'user' %}
+          <div class="msg-row user"><div class="bubble">{{ message.content }}</div></div>
+        {% else %}
+          <div class="msg-row assistant">
+            <div class="icon"><img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="AI"></div>
+            <!-- render as HTML so bold/line breaks look right -->
+            <div class="bubble">{{ message.content|safe }}</div>
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      {% if show_first_options %}
+        <!-- First options under greeting. Chatbox disabled until a tap. -->
+        <div class="btn-row" id="first-options">
+          <button class="btn" data-opt="Dining" onclick="chooseOption(this)">Dining</button>
+          <button class="btn" data-opt="Shopping" onclick="chooseOption(this)">Shopping</button>
+          <button class="btn" data-opt="Relax" onclick="chooseOption(this)">Relax</button>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="msg-row assistant">
+        <div class="icon"><img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="AI"></div>
+        <div class="bubble">Hi there 👋</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <form id="chat-form" method="POST" action="{{ url_for('chat') }}">
+    <input type="hidden" name="passenger_name" id="passenger_name" value="{{ passenger_name|default('') }}">
+    <input type="hidden" name="flight_number" id="flight_number" value="{{ flight_number|default('') }}">
+    <input type="hidden" name="gate" id="gate" value="{{ gate|default('') }}">
+    <input type="hidden" name="time" id="time" value="{{ time|default('') }}">
+
+    <div class="input-bar {% if pre_scan or show_first_options %}hidden{% endif %}" id="input-bar">
+      <input name="question" id="user-input" placeholder="Write something..." autocomplete="off" />
+      <button id="send-btn" type="submit">
+        <img src="{{ url_for('static', filename='assets/send.svg') }}" alt="Send" width="26">
+      </button>
+    </div>
   </form>
 
-  <a href="{{ url_for('reset') }}" class="reset-link">🔁 Reset Conversation</a>
-</div>
+  <script id="server-data" type="application/json">
+    {{ {'pending': pending_question|default('')} | tojson }}
+  </script>
 
+  <script>
+    const API_CHAT_URL = "{{ url_for('ask') }}";
+    const serverDataEl = document.getElementById('server-data');
+    let PENDING_QUESTION = '';
+    try { PENDING_QUESTION = (JSON.parse(serverDataEl.textContent||'{}').pending)||''; } catch(_) {}
 
+    const chatContainer = document.getElementById('chat-container');
+    const chatForm = document.getElementById('chat-form');
+    const userInput = document.getElementById('user-input');
+    const inputBar  = document.getElementById('input-bar');
 
+    function scrollToBottom(){ setTimeout(()=>{ chatContainer.scrollTop = chatContainer.scrollHeight; }, 60); }
+
+    // Escape USER text
+    function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML.replace(/\n/g,'<br>'); }
+
+    // Lightly sanitize ASSISTANT HTML (remove risky tags, keep formatting)
+    function sanitizeAssistant(html){
+      const box = document.createElement('div');
+      box.innerHTML = html || '';
+      box.querySelectorAll('script,iframe,object,embed,link,meta').forEach(el => el.remove());
+      return box.innerHTML;
+    }
+
+    function appendUserBubble(text){
+      const row = document.createElement('div');
+      row.className = 'msg-row user';
+      row.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+      chatContainer.appendChild(row); scrollToBottom();
+    }
+
+    function appendAssistantBubble(html){
+      const row = document.createElement('div');
+      row.className = 'msg-row assistant';
+      row.innerHTML = `<div class="icon"><img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="AI"></div>
+                       <div class="bubble">${html}</div>`;
+      chatContainer.appendChild(row); scrollToBottom();
+    }
+
+    function showLoader(){
+      const row = document.createElement('div');
+      row.className = 'msg-row assistant loader-row';
+      row.innerHTML = `<div class="icon"><img src="{{ url_for('static', filename='assets/logo.svg') }}" alt="AI"></div>
+                       <div class="bubble"><span class="spinner" style="vertical-align:middle;display:inline-block;width:18px;height:18px;border-radius:50%;border:3px solid rgba(0,0,0,.12);border-top-color:rgba(0,0,0,.6);animation:spin 1s linear infinite;"></span> Typing…</div>`;
+      chatContainer.appendChild(row); scrollToBottom(); return row;
+    }
+
+    function removeLoader(node){ if(node && node.parentNode) node.parentNode.removeChild(node); }
+
+    // First selection buttons
+    function chooseOption(btnEl){
+      const opt = btnEl.getAttribute('data-opt');
+      document.querySelectorAll('#first-options .btn').forEach(b=>b.classList.remove('selected'));
+      btnEl.classList.add('selected');
+      setTimeout(()=>{
+        const row = document.getElementById('first-options');
+        if(row) row.style.display = 'none';
+        inputBar.classList.remove('hidden');
+      }, 250);
+      const msg = `I am interested in ${opt}`;
+      appendUserBubble(msg);
+      const loader = showLoader();
+      sendToApi(msg, loader);
+    }
+
+    async function sendToApi(text, loaderNode){
+      const payload = {
+        question: text,
+        passenger_name: document.getElementById('passenger_name').value || '',
+        flight_number: document.getElementById('flight_number').value || '',
+        gate: document.getElementById('gate').value || '',
+        time: document.getElementById('time').value || ''
+      };
+      try{
+        const res = await fetch(API_CHAT_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+        const data = await res.json();
+        removeLoader(loaderNode);
+        // INSERT ASSISTANT HTML (sanitized), DO NOT escape
+        appendAssistantBubble(sanitizeAssistant(data.assistant || 'Sorry, something went wrong.'));
+      }catch(err){
+        console.error(err);
+        removeLoader(loaderNode);
+        appendAssistantBubble('Sorry — I could not reach the assistant right now.');
+      }
+    }
+
+    chatForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      if (inputBar.classList.contains('hidden')) return;
+      const text = (document.getElementById('user-input').value||'').trim();
+      if(!text) return;
+      appendUserBubble(text);
+      document.getElementById('user-input').value = '';
+      const loader = showLoader();
+      sendToApi(text, loader);
+    });
+
+    document.addEventListener('DOMContentLoaded', scrollToBottom);
+  </script>
 </body>
 </html>

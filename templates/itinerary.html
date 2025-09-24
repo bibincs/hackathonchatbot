@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>My Itinerary</title>
+  <style>
+    :root{ --primary:#001f6e; --muted:#767676; --border:#ececec; --bg:#f7f7f7; --success:#1a7f37; }
+    *{ box-sizing:border-box; }
+    body{font-family:Inter, Arial, sans-serif;margin:0;background:var(--bg);color:#222}
+    .navbar{display:flex;justify-content:space-between;align-items:center;background:#fff;padding:12px 16px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+    .wrap{max-width:860px;margin:18px auto;padding:0 16px}
+    h1{margin:24px 0 4px;font-size:24px;font-weight:800;}
+    .subhead{color:var(--success);font-size:15px;margin-bottom:18px;}
+
+    h2{margin:18px 0 10px}
+
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px;margin:10px 0;position:relative;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+    .delete-btn{position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:16px;color:#999;}
+    .delete-btn:hover{color:#e30613}
+
+    .card-row{ display:flex; gap:14px; }
+    .thumb{flex:0 0 84px;width:84px;height:84px;border-radius:12px;overflow:hidden;border:1px solid var(--border);background:#fafafa;display:grid;place-items:center;}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+    .thumb-fallback{width:100%;height:100%;display:grid;place-items:center;font-weight:700;font-size:28px;color:#444;background:#f0f0f0;}
+
+    .content{flex:1;display:flex;flex-direction:column;min-width:0;}
+    .title{font-weight:800;margin:0 0 4px 0;}
+    .desc{margin:0 0 8px 0;line-height:1.35;}
+    .meta{color:var(--muted);margin:0;}
+    .meta + .meta{margin-top:2px;}
+
+    .actions{margin-top:20px;display:flex;gap:8px;justify-content:flex-end;align-items:center;}
+
+    a.btn, .btn{border:1px solid #ddd;border-radius:10px;padding:9px 12px;text-decoration:none;color:#111;background:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+    .btn:focus{outline:2px solid #1a73e8;outline-offset:2px;}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <strong>🧾 My Itinerary</strong>
+    <a class="btn" href="{{ url_for('chat') }}">← Back to chat</a>
+  </div>
+
+  <div class="wrap">
+    <!-- PAGE HEADING -->
+    <h1>Your Personalized Itinerary</h1>
+    <div class="subhead">
+      Flight {{ flight_number }} – Boarding in: {{ countdown }}
+    </div>
+
+    {% for category in ["Dining","Shopping","Relax"] %}
+      {% set items = itinerary.get(category, []) %}
+      {% if items %}
+        <h2>{{ category }}</h2>
+        {% for it in items %}
+          {% set dst_id = (it.id or (it.location_ids[0] if it.location_ids)) %}
+          {% set thumb = it.thumbnail or it.image or it.image_url or it.logo %}
+
+          <div class="card">
+            <form method="POST" action="{{ url_for('delete_itinerary', category=category, index=loop.index0) }}">
+              <button type="submit" class="delete-btn" title="Remove">✖</button>
+            </form>
+
+            <div class="card-row">
+              <div class="thumb" aria-hidden="true">
+                {% if thumb %}
+                  <img src="{{ thumb }}" alt="">
+                {% else %}
+                  <div class="thumb-fallback">{{ (it.name[:1] if it.name) or "•" }}</div>
+                {% endif %}
+              </div>
+
+              <div class="content">
+                <h3 class="title">{{ it.name }}</h3>
+                {% if it.description %}<p class="desc">{{ it.description }}</p>{% endif %}
+                {% if it.walk_time %}<p class="meta">{{ it.walk_time }}</p>{% endif %}
+                {% if it.concourse %}<p class="meta">{{ it.concourse }}</p>{% endif %}
+
+                <div class="actions">
+                  <a class="btn" href="{{ url_for('directions', dst=dst_id) }}">🧭 Get directions</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+
+    {% if not itinerary.Dining and not itinerary.Shopping and not itinerary.Relax %}
+      <p>No items yet. Go back and pick some options!</p>
+    {% endif %}
+  </div>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import re
 import numpy as np
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 def parse_location_code(code: str) -> str:
     parts = code.split("-")
@@ -31,8 +31,8 @@ def clean_html(raw_html: str) -> str:
 
 def replace_location_codes(text: str) -> str:
     pattern = r'B01-UL\d{3}-ID([A-Z])\d{4}'
-    def repl(match):
-        code = match.group(0)
+    def repl(_match):
+        code = _match.group(0)
         return parse_location_code(code)
     return re.sub(pattern, repl, text)
 
@@ -48,7 +48,15 @@ def format_chunks(data: List[Dict]) -> List[str]:
             body_raw = clean_html(content.get("mcn_body", "")).strip()
             body = replace_location_codes(body_raw)
             lang = content.get("mcn_language", "en")
-            text = f"Type: {ntype}\nTitle: {title}\nCategories: {categories}\nLocations: {locations}\nLanguage: {lang}\nContent: {body}"
+            # IMPORTANT: keep key terms (title, categories, locations, body) in the text we embed/filter on
+            text = (
+                f"Type: {ntype}\n"
+                f"Title: {title}\n"
+                f"Categories: {categories}\n"
+                f"Locations: {locations}\n"
+                f"Language: {lang}\n"
+                f"Content: {body}"
+            )
             chunks.append(text)
     return chunks
 
@@ -64,7 +72,7 @@ def cosine_similarity(a, b):
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
 def infer_concourse_from_gate(gate: str) -> str:
-    if not gate or len(gate) < 2:
+    if not gate or len(gate) < 1:
         return "Unknown"
     letter = gate[0].upper()
     return {
@@ -75,21 +83,54 @@ def infer_concourse_from_gate(gate: str) -> str:
         "E": "Concourse E"
     }.get(letter, "Unknown")
 
-def search_similar(client, model, question: str, embedded_chunks: List[Dict], gate: str = "") -> str:
+def _filter_by_cuisine(chunks: List[Dict], cuisine: str) -> List[Dict]:
+    if not cuisine:
+        return []
+    c = cuisine.lower()
+    out = []
+    for item in chunks:
+        t = item["text"].lower()
+        # match cuisine word in title/categories/content
+        if c in t:
+            out.append(item)
+    return out
+
+def search_similar(
+    client,
+    model,
+    question: str,
+    embedded_chunks: List[Dict],
+    gate: str = "",
+    cuisine: Optional[str] = None
+) -> str:
+    """Optionally prioritizes cuisine matches; falls back to concourse, then global."""
+    # Embed question
     res = client.embeddings.create(model=model, input=question)
     q_embedding = res.data[0].embedding
 
-    concourse = infer_concourse_from_gate(gate)
+    # Start with a cuisine filter if provided
+    candidates: List[Dict] = []
+    if cuisine:
+        cuisine_hits = _filter_by_cuisine(embedded_chunks, cuisine)
+        if cuisine_hits:
+            candidates = cuisine_hits
 
-    if concourse != "Unknown":
-        filtered_chunks = [chunk for chunk in embedded_chunks if concourse in chunk['text']]
-    else:
-        filtered_chunks = embedded_chunks
+    # If no cuisine hits, use concourse filter (based on gate)
+    if not candidates:
+        concourse = infer_concourse_from_gate(gate)
+        if concourse != "Unknown":
+            candidates = [ch for ch in embedded_chunks if concourse.lower() in ch["text"].lower()]
 
-    similarities = [
-        (cosine_similarity(q_embedding, item['embedding']), item['text'])
-        for item in filtered_chunks
-    ]
-    similarities.sort(reverse=True)
-    top_results = [text for _, text in similarities[:3]]
-    return "\n\n".join(top_results)
+    # If still empty, use all
+    if not candidates:
+        candidates = embedded_chunks
+
+    # Rank by cosine similarity
+    sims = []
+    for item in candidates:
+        sims.append((cosine_similarity(q_embedding, item["embedding"]), item["text"]))
+    sims.sort(reverse=True)
+
+    # Return top 3 joined as context
+    top = [t for _, t in sims[:3]]
+    return "\n\n".join(top)

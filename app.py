@@ -279,7 +279,7 @@ def chat():
         passenger_name  = (session.get("passenger_name") or "Passenger").upper()
         destination     = session.get("to") or "London (LHR)"  # TODO: map from flight if available
         time_to_flight  = session.get("time_to_flight") or random_hours_4_to_12()
-        gate            = session.get("gate") or random_gate()
+        gate            =  random_gate() //session.get("gate") or random_gate()
 
         first_msg = (
             
